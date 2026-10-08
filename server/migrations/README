@@ -1,0 +1,15 @@
+Shared migration workflow (Module M). See ../docs/migrations.md.
+
+- env.py        : shared Alembic environment (DATABASE_URL or -x db_url, metadata, exclusions)
+- ../app/models.py : imports feature-module SQLModel tables for Alembic metadata
+- versions/     : one linear chain: 0001 D placeholder widget, 0002 G/H tables,
+                  0003 G auction lots, 0004 I/J tables (reviewed SQL payload)
+- infra_probe   : dev/test-only table excluded by env.py
+
+Add a revision:  uv run alembic revision --autogenerate -m "<module>: <change>"
+Apply:           DATABASE_URL=... uv run alembic upgrade head
+
+Run outside the Worker using psycopg, against Neon directly. Production order:
+CI green -> migrations -> Worker deploy -> verify. Worker runtime uses pg8000.
+Migration tests use MIGRATION_DATABASE_URL (disposable *_migration_test);
+Postgres module/infra tests use TEST_DATABASE_URL (disposable *_modules_test).
