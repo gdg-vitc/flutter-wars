@@ -21,7 +21,7 @@
     "DATABASE_POOL_SIZE": "1",
     "DATABASE_MAX_OVERFLOW": "0",
     "JWT_ALGORITHM": "HS256",
-    "JWT_ACCESS_TOKEN_MINUTES": "120",
+    "AUTH_ACCESS_TOKEN_MINUTES": "15",
     "GOOGLE_OAUTH_CLIENT_ID": "<GOOGLE_OAUTH_CLIENT_ID>",
     "GOOGLE_OAUTH_REDIRECT_URI": "https://<worker-host>/auth/google/callback"
   },

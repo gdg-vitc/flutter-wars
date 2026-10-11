@@ -3,8 +3,7 @@
 Refresh-capable logins use 15-minute JWT access tokens, opaque rotating refresh
 credentials, a 7-day inactivity timeout, and a fixed 30-day maximum session lifetime.
 Configure `AUTH_ACCESS_TOKEN_MINUTES`, `AUTH_REFRESH_IDLE_DAYS`, and `AUTH_SESSION_DAYS`.
-All login endpoints use the refresh-capable session lifetime. `JWT_ACCESS_TOKEN_MINUTES`
-is retained for compatibility with older tooling, not for application login issuance.
+All login endpoints use the same refresh-capable session lifetime.
 These are application credentials, not Google refresh tokens.
 
 ## Flutter integration (opt-in)

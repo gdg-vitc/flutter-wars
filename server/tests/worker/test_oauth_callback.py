@@ -50,7 +50,7 @@ def test_oauth_callback_handoff(case, monkeypatch):
                 user_id=p.user_id, email=p.email, team_id=None, role=p.role, settings=settings
             ),
             refresh_token="r" * 43,
-            expires_in=3600,
+            expires_in=settings.auth_access_token_minutes * 60,
         ),
     )
 

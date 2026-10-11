@@ -12,7 +12,7 @@ from app.core.errors import AppError
 def create_access_token(
     *, user_id: str, email: str, team_id: str | None, role: str, settings: Settings, session_id: str | None = None
 ) -> str:
-    expires_at = datetime.now(UTC) + timedelta(minutes=settings.jwt_access_token_minutes)
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.auth_access_token_minutes)
     claims = {"sub": user_id, "email": email, "team_id": team_id, "role": role, "exp": expires_at}
     if session_id is not None:
         claims["sid"] = session_id

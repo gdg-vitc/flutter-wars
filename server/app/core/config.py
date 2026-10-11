@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(validation_alias="DATABASE_MAX_OVERFLOW", ge=0, le=100)
     jwt_secret_key: SecretStr = Field(validation_alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(validation_alias="JWT_ALGORITHM")
-    jwt_access_token_minutes: int = Field(validation_alias="JWT_ACCESS_TOKEN_MINUTES", ge=1, le=1440)
     auth_access_token_minutes: int = Field(default=15, ge=1, le=60, validation_alias="AUTH_ACCESS_TOKEN_MINUTES")
     auth_session_days: int = Field(default=30, ge=1, le=90, validation_alias="AUTH_SESSION_DAYS")
     auth_refresh_idle_days: int = Field(default=7, ge=1, le=30, validation_alias="AUTH_REFRESH_IDLE_DAYS")

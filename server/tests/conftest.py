@@ -31,7 +31,7 @@ for key, value in {
     "DATABASE_MAX_OVERFLOW": "20",
     "JWT_SECRET_KEY": "test-jwt-secret-not-for-production-0123456789",
     "JWT_ALGORITHM": "HS256",
-    "JWT_ACCESS_TOKEN_MINUTES": "60",
+    "AUTH_ACCESS_TOKEN_MINUTES": "15",
 }.items():
     os.environ.setdefault(key, value)
 

@@ -159,7 +159,7 @@ Set the result in `.env`:
 ```dotenv
 JWT_SECRET_KEY=<generated-secret>
 JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_MINUTES=60
+AUTH_ACCESS_TOKEN_MINUTES=15
 ```
 
 The JWT is returned by `POST /auth/google` and is used for participant APIs:

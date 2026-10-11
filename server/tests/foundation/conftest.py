@@ -26,7 +26,7 @@ def settings() -> Settings:
         DATABASE_MAX_OVERFLOW=10,
         JWT_SECRET_KEY=os.environ["JWT_SECRET_KEY"],
         JWT_ALGORITHM="HS256",
-        JWT_ACCESS_TOKEN_MINUTES=60,
+        AUTH_ACCESS_TOKEN_MINUTES=15,
     )
 
 

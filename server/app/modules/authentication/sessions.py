@@ -87,7 +87,7 @@ def pair(db: Session, settings: Settings, row: AuthSession, principal) -> TokenR
             email=principal.email,
             team_id=str(principal.team_id) if principal.team_id else None,
             role=principal.role,
-            settings=settings.model_copy(update={"jwt_access_token_minutes": settings.auth_access_token_minutes}),
+            settings=settings,
             session_id=str(row.id),
         ),
         refresh_token=raw,
