@@ -104,6 +104,7 @@ def sdk(monkeypatch):
         monkeypatch.delitem(sys.modules, name, raising=False)
     stream = importlib.import_module("round_stream")
     worker = importlib.import_module("worker")
+    monkeypatch.setattr(worker, "_wait_database_slot", lambda: asyncio.sleep(0))
     monkeypatch.setattr(stream, "session_factory", lambda: nullcontext(None))
     monkeypatch.setattr(stream.RoundStream, "_app", lambda self: SimpleNamespace(state=SimpleNamespace(settings=None)))
     return stream, worker, workers
@@ -244,6 +245,97 @@ def test_worker_notifies_only_after_successful_mutations(sdk, monkeypatch, metho
         for task in ctx.tasks:
             await task
         assert bool(notified) == notify
+
+    asyncio.run(scenario())
+
+
+def test_worker_serializes_requests_across_entrypoint_instances(sdk, monkeypatch):
+    _, worker, workers = sdk
+    monkeypatch.setattr(worker, "get_app", lambda env: None)
+
+    async def scenario():
+        entered, release = asyncio.Event(), asyncio.Event()
+        active = 0
+        peak = 0
+
+        async def serve(*args):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            entered.set()
+            await release.wait()  # synchronous sockets can yield just like this
+            active -= 1
+            return workers.Response(status=401)
+
+        monkeypatch.setattr(worker, "_app", serve)
+
+        async def adapter(application, *args):
+            await application({"type": "http"}, None, None)
+            return workers.Response(status=401)
+
+        monkeypatch.setattr(workers.asgi, "fetch", adapter)
+        request = _request(uuid4(), method="POST", path="/auth/refresh")
+        first = asyncio.create_task(worker.Default(Context(), None).fetch(request))
+        await entered.wait()
+        second = asyncio.create_task(worker.Default(Context(), None).fetch(request))
+        await asyncio.sleep(0)
+        assert peak == 1
+        release.set()
+        responses = await asyncio.gather(first, second)
+        assert [r.status for r in responses] == [401, 401]
+        assert peak == 1 and not worker._database_lock.locked()
+
+    asyncio.run(scenario())
+
+
+def test_worker_releases_database_lock_after_cancelled_request(sdk, monkeypatch):
+    _, worker, workers = sdk
+    monkeypatch.setattr(worker, "get_app", lambda env: None)
+
+    async def scenario():
+        entered = asyncio.Event()
+
+        async def serve(*args):
+            entered.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(worker, "_app", serve)
+
+        async def adapter(application, *args):
+            await application({"type": "http"}, None, None)
+            return workers.Response(status=401)
+
+        monkeypatch.setattr(workers.asgi, "fetch", adapter)
+        request = _request(uuid4(), method="POST", path="/auth/refresh")
+        first = asyncio.create_task(worker.Default(Context(), None).fetch(request))
+        await entered.wait()
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert not worker._database_lock.locked()
+
+        async def recovered(*args):
+            return workers.Response(status=401)
+
+        monkeypatch.setattr(worker, "_app", recovered)
+        assert (await worker.Default(Context(), None).fetch(request)).status == 401
+
+    asyncio.run(scenario())
+
+
+def test_asgi_lifespan_does_not_wait_for_transaction_lock(sdk, monkeypatch):
+    _, worker, _ = sdk
+
+    async def scenario():
+        called = []
+
+        async def app(scope, receive, send):
+            called.append(scope["type"])
+
+        monkeypatch.setattr(worker, "_app", app)
+        async with worker._database_lock:
+            await asyncio.wait_for(worker._serialized_app({"type": "lifespan"}, None, None), timeout=1)
+        assert called == ["lifespan"]
 
     asyncio.run(scenario())
 

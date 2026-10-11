@@ -56,7 +56,10 @@ class RoundStream(DurableObject):
             # Clear before sampling so a commit during the refresh can queue one successor.
             if refresh:
                 self._refresh_pending = False
-            return await self._fetch(request)
+            from worker import database_access
+
+            async with database_access():
+                return await self._fetch(request)
         finally:
             self._lock.release()
 
@@ -138,7 +141,10 @@ class RoundStream(DurableObject):
 
     async def alarm(self):
         async with self._lock:
-            await self._alarm()
+            from worker import database_access
+
+            async with database_access():
+                await self._alarm()
 
     async def _alarm(self):
         if not self.ctx.getWebSockets():
@@ -163,8 +169,11 @@ class RoundStream(DurableObject):
         try:
             app = self._app()
             data = json.loads(ws.deserializeAttachment())
-            with session_factory() as session:
-                authorize(session, StreamAuth(data["access_token"], data["expires_at"]), app.state.settings)
+            from worker import database_access
+
+            async with database_access():
+                with session_factory() as session:
+                    authorize(session, StreamAuth(data["access_token"], data["expires_at"]), app.state.settings)
             ws.send(json.dumps({"type": "pong", "server_time": datetime.now(UTC).isoformat()}))
         except AppError:
             ws.close(1008, "Sign in again")

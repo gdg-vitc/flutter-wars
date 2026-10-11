@@ -1,6 +1,6 @@
 # Deployment (Module M)
 
-> The Worker builds routes, dependency graphs, middleware, and OpenAPI at deployment
+> The Worker builds routes, dependency graphs, and middleware at deployment
 > for Cloudflare's Python memory snapshot. Only settings, trading runtime configuration,
 > and the database engine are initialized on the first request; Hyperdrive connection
 > properties cannot be read in global scope.
@@ -24,6 +24,16 @@ OpenAPI is generated lazily for documentation requests, avoiding its schema allo
 in isolates that only serve application traffic.
 Placement is set to `aws:ap-southeast-1` to reduce repeated database round trips to
 the Singapore Neon database. Preserve this setting in local deployment configs too.
+
+Python Worker synchronous sockets yield to the event loop. A shared isolate-level
+`asyncio.Lock` serializes complete ASGI HTTP transactions, background notification reads,
+and Durable Object database work, following [Cloudflare's concurrency guidance](https://developers.cloudflare.com/hyperdrive/examples/python-workers/#concurrency-and-async-safety).
+Keep commit, rollback, and connection cleanup inside that lock; locking individual
+queries leaves synchronous driver stacks able to overlap. Waiting requests use
+request-owned `scheduler.wait` timers: a shared Python lock Future alone causes
+workerd to cancel queued requests as hung. The ASGI adapter reads request bodies
+before application serialization, and lifespan startup/shutdown bypasses the lock.
+Requests can queue within an isolate while its current transaction finishes.
 
 ## Worker bundle / plan capacity
 

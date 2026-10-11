@@ -5,9 +5,11 @@ connection properties require a request context, so only binding-dependent setup
 is deferred to the first request; expensive imports run at deployment time.
 """
 
+import asyncio
 import gc
 import logging
 import os
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -115,6 +117,39 @@ _app.state.cloudflare_runtime = True
 # in every API isolate. FastAPI generates and caches it when /openapi.json is used.
 _app.middleware_stack = _app.build_middleware_stack()
 _bound = False
+# Synchronous pg8000 sockets yield through Pyodide stack switching. Cloudflare
+# requires these operations to be serialized, including background notifications.
+# One lock per isolate also covers distinct WorkerEntrypoint request instances.
+_database_lock = asyncio.Lock()
+
+
+async def _wait_database_slot():
+    from js import scheduler
+
+    # A JS timer belongs to the waiting request. asyncio.Lock's shared Future
+    # alone is not visible as pending I/O to workerd's per-request hang detector.
+    await scheduler.wait(1)
+
+
+@asynccontextmanager
+async def database_access():
+    while _database_lock.locked():
+        await _wait_database_slot()
+    # No suspension between observing an unlocked lock and acquiring it.
+    async with _database_lock:
+        yield
+
+
+async def _serialized_app(scope, receive, send):
+    # Let the ASGI adapter consume the request body in its owning request context.
+    # Only application execution (including transaction cleanup) is serialized.
+    if scope["type"] != "http":
+        # The adapter keeps lifespan running until the request completes.
+        # Locking it would prevent that request from ever acquiring the lock.
+        await _app(scope, receive, send)
+        return
+    async with database_access():
+        await _app(scope, receive, send)
 
 # Finalize file-backed import resources before filesystem descriptors become
 # invalid across snapshot restoration. Also include objects created by routing.
@@ -141,10 +176,11 @@ async def notify_streams(env, path):
         from app.core.services import gateway
 
         round_ids = set()
-        with session_factory() as session:
-            current = gateway(MarketGateway, session).current_round_id()
-            if current:
-                round_ids.add(current)
+        async with database_access():
+            with session_factory() as session:
+                current = gateway(MarketGateway, session).current_round_id()
+                if current:
+                    round_ids.add(current)
         parts = path.strip("/").split("/")
         if "rounds" in parts:
             try:
@@ -160,7 +196,7 @@ async def notify_streams(env, path):
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        app = get_app(self.env)
+        get_app(self.env)
         path = urlparse(request.url).path
         if path.startswith("/market/rounds/") and path.endswith("/stream"):
             if request.method != "GET" or (request.headers.get("Upgrade") or "").lower() != "websocket":
@@ -170,7 +206,7 @@ class Default(WorkerEntrypoint):
             except ValueError:
                 return Response("Invalid round", status=400)
             return await self.env.ROUND_STREAM.getByName(str(round_id)).fetch(request)
-        response = await asgi.fetch(app, request, self.env, self.ctx)
+        response = await asgi.fetch(_serialized_app, request, self.env, self.ctx)
         if (
             request.method in ("POST", "PATCH", "DELETE")
             and 200 <= response.status < 300
