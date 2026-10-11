@@ -13,15 +13,11 @@ from uuid import UUID
 
 from pyodide.http import pyfetch
 from round_stream import RoundStream
+from sqlalchemy.dialects import registry
 from sqlalchemy.pool import NullPool
 from workers import Response, WorkerEntrypoint, asgi
 
-from app.factory import create_app
-
-# Finalize unreachable import-time objects before the runtime snapshots Python
-# memory. In particular, file-backed import resources must not be finalized later
-# against file descriptors from the pre-snapshot filesystem.
-gc.collect()
+from app.factory import build_app, initialize_app
 
 __all__ = ["Default", "RoundStream"]
 
@@ -86,8 +82,7 @@ def _run_blocking_inline():
     anyio.to_thread.run_sync = run_sync
 
 
-def _build(env):
-    _run_blocking_inline()
+def _bind(env):
     from app.core import db
     from app.infra.db import target_from_hyperdrive
 
@@ -102,22 +97,34 @@ def _build(env):
             os.environ[name] = str(value)
     os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
 
+    from app.core.config import get_settings
     from app.modules.authentication import http
 
     http.install(get=_get_json, post=_post_form)
-    app = create_app()
-    app.state.cloudflare_runtime = True
-    app.openapi()
-    return app
+    settings = get_settings()
+    initialize_app(_app, settings)
 
 
-_app = None
+# Route registration, dependency analysis, response schemas, and the middleware
+# stack do not need runtime bindings. Preserve them in the deployment snapshot.
+_run_blocking_inline()
+registry.load("postgresql.pg8000")
+_app = build_app()
+_app.state.cloudflare_runtime = True
+_app.openapi()
+_app.middleware_stack = _app.build_middleware_stack()
+_bound = False
+
+# Finalize file-backed import resources before filesystem descriptors become
+# invalid across snapshot restoration. Also include objects created by routing.
+gc.collect()
 
 
 def get_app(env):
-    global _app
-    if _app is None:
-        _app = _build(env)
+    global _bound
+    if not _bound:
+        _bind(env)
+        _bound = True
     return _app
 
 

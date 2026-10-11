@@ -1,8 +1,9 @@
 # Deployment (Module M)
 
-> The Worker preloads application imports at deployment for Cloudflare's Python
-> memory snapshot. Binding-dependent app construction runs once per isolate on its
-> first request; Hyperdrive connection properties cannot be read in global scope.
+> The Worker builds routes, dependency graphs, middleware, and OpenAPI at deployment
+> for Cloudflare's Python memory snapshot. Only settings, trading runtime configuration,
+> and the database engine are initialized on the first request; Hyperdrive connection
+> properties cannot be read in global scope.
 > Its settings and
 > secrets are listed in [environment-reference.md](environment-reference.md#application-settings-module-a);
 > set `JWT_SECRET_KEY` and `GOOGLE_OAUTH_CLIENT_SECRET` with `wrangler secret put` before
@@ -18,7 +19,9 @@ against Neon (control-plane operation), never through Hyperdrive.
 at Worker module scope so fresh isolates reuse the deployment snapshot. The Worker
 also collects unreachable import-time objects before snapshotting, avoiding deferred
 file-resource finalizers against the restored runtime's filesystem. Do not suppress
-`ZipFile` exceptions globally. OpenAPI is generated and cached when the app is built.
+`ZipFile` exceptions globally. OpenAPI is generated and cached in the deployment snapshot.
+Placement is set to `aws:ap-southeast-1` to reduce repeated database round trips to
+the Singapore Neon database. Preserve this setting in local deployment configs too.
 
 ## Worker bundle / plan capacity
 

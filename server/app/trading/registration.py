@@ -35,5 +35,4 @@ def build_runtime(settings: Settings | None = None) -> BackendModules:
 
 def register(app: FastAPI) -> None:
     provide(TradingGateway, TradingGatewayImpl)
-    app.state.backend_runtime = build_runtime(app.state.settings)
     app.include_router(build_router(get_runtime, require_team))

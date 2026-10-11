@@ -7,6 +7,7 @@
   "account_id": "<CLOUDFLARE_ACCOUNT_ID>",
   "compatibility_date": "2026-10-07",
   "compatibility_flags": ["python_workers"],
+  "placement": { "region": "aws:ap-southeast-1" },
   "hyperdrive": [
     // Hyperdrive config pointing at Neon's DIRECT host, caching disabled.
     { "binding": "HYPERDRIVE", "id": "<HYPERDRIVE_CONFIG_ID>" }

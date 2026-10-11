@@ -19,9 +19,15 @@ from app.core.config import Settings
 from app.core import db
 with patch.object(Settings, '__init__', side_effect=AssertionError('settings read during import')):
     with patch.object(db, 'configure_database', side_effect=AssertionError('database configured during import')):
-        from app.factory import create_app
+        from app.factory import create_app, build_app
+        app = build_app()
+        schema = app.openapi()
+        app.middleware_stack = app.build_middleware_stack()
 assert callable(create_app)
 assert not db.engine_configured()
+assert '/auth/refresh' in schema['paths']
+assert '/market/rounds/current' in schema['paths']
+assert not hasattr(app.state, 'settings')
 """,
         ],
         env=env,
