@@ -6,6 +6,7 @@ the token is verified with PyJWT (RS256), checking signature, expiry, audience (
 that Google has verified the email.
 """
 
+import logging
 import time
 
 import jwt
@@ -16,6 +17,7 @@ GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
 _KEYS: dict[str, dict] = {}
 _KEYS_EXPIRE_AT = 0.0
+log = logging.getLogger("gdg_workshop")
 
 
 async def _signing_keys(refresh: bool = False) -> dict[str, dict]:
@@ -30,6 +32,7 @@ async def _signing_keys(refresh: bool = False) -> dict[str, dict]:
 async def verify_google_token(credential: str, audience: str | None) -> dict[str, str] | None:
     """Return only stable identity claims; never log credentials or provider details."""
     if not audience:
+        log.warning("google_verification_failed reason=missing_client_id")
         return None  # without our client ID the audience cannot be checked
     try:
         kid = jwt.get_unverified_header(credential).get("kid")
@@ -37,6 +40,7 @@ async def verify_google_token(credential: str, audience: str | None) -> dict[str
         if kid not in keys:
             keys = await _signing_keys(refresh=True)  # Google rotated its keys
         if kid not in keys:
+            log.warning("google_verification_failed reason=unknown_signing_key")
             return None
         claims = jwt.decode(
             credential,
@@ -45,15 +49,20 @@ async def verify_google_token(credential: str, audience: str | None) -> dict[str
             audience=audience,
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
         )
-    except (jwt.PyJWTError, http.HttpError, KeyError, TypeError, ValueError):
+    except (jwt.PyJWTError, http.HttpError, KeyError, TypeError, ValueError) as exc:
+        # Exception classes identify failed checks without exposing credentials,
+        # claims, provider response text, or traceback source loading in Pyodide.
+        log.warning("google_verification_failed exception_type=%s", type(exc).__name__)
         return None
     subject = claims.get("sub")
     email = claims.get("email")
-    if (
-        claims.get("iss") not in GOOGLE_ISSUERS
-        or claims.get("email_verified") is not True
-        or not isinstance(subject, str)
-        or not isinstance(email, str)
-    ):
+    if claims.get("iss") not in GOOGLE_ISSUERS:
+        log.warning("google_verification_failed reason=invalid_issuer")
+        return None
+    if claims.get("email_verified") is not True:
+        log.warning("google_verification_failed reason=email_not_verified")
+        return None
+    if not isinstance(subject, str) or not isinstance(email, str):
+        log.warning("google_verification_failed reason=missing_identity_claims")
         return None
     return {"google_subject": subject, "email": email}
