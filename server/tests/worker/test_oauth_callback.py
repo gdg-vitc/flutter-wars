@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import install_exception_handlers
-from app.modules.authentication.jwt import decode_access_token
+from app.modules.authentication.jwt import create_access_token, decode_access_token
 
 auth = importlib.import_module("app.modules.authentication.router")
 
@@ -46,7 +46,7 @@ def test_oauth_callback_handoff(case, monkeypatch):
         auth.sessions,
         "issue",
         lambda session, settings, p: auth.TokenResponse(
-            access_token=auth.create_access_token(
+            access_token=create_access_token(
                 user_id=p.user_id, email=p.email, team_id=None, role=p.role, settings=settings
             ),
             refresh_token="r" * 43,
@@ -76,7 +76,8 @@ def test_oauth_callback_handoff(case, monkeypatch):
                 "",
             )
             query = parse_qs(target.query)
-            assert set(query) == {"access_token"}
+            assert set(query) == {"access_token", "refresh_token"}
+            assert query["refresh_token"] == ["r" * 43]
             assert decode_access_token(query["access_token"][0], app.state.settings)["sub"] == "user-1"
             assert response.headers["cache-control"] == "no-store"
             assert "Max-Age=0" in response.headers["set-cookie"]

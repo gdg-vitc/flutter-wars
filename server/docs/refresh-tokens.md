@@ -3,7 +3,8 @@
 Refresh-capable logins use 15-minute JWT access tokens, opaque rotating refresh
 credentials, a 7-day inactivity timeout, and a fixed 30-day maximum session lifetime.
 Configure `AUTH_ACCESS_TOKEN_MINUTES`, `AUTH_REFRESH_IDLE_DAYS`, and `AUTH_SESSION_DAYS`.
-Legacy browser callbacks retain `JWT_ACCESS_TOKEN_MINUTES` and their existing URL.
+All login endpoints use the refresh-capable session lifetime. `JWT_ACCESS_TOKEN_MINUTES`
+is retained for compatibility with older tooling, not for application login issuance.
 These are application credentials, not Google refresh tokens.
 
 ## Flutter integration (opt-in)
@@ -24,15 +25,17 @@ These are application credentials, not Google refresh tokens.
    after a lost successful response, revokes the session and requires login.
    Refresh once for an expired-token response; do not loop on permission errors.
 
-Without PKCE parameters, the existing access-token deep link is preserved and
-never includes a refresh token. `POST /auth/google` accepts a verified Google ID
+Without PKCE parameters, the callback redirects to
+`flutterwars://auth-callback?access_token=<jwt>&refresh_token=<opaque-token>`.
+Custom-scheme interception and URL logging can expose both credentials; PKCE is
+recommended when the frontend is ready. `POST /auth/google` accepts a verified Google ID
 credential and returns a refresh-capable session directly over HTTPS.
 
 `POST /auth/logout` accepts the refresh token and revokes its session (204,
 including unknown tokens). `POST /auth/logout-all` uses Bearer authentication and
 revokes all existing refresh-capable sessions for that user. Clear local credentials.
-Legacy JWTs have no session ID and remain valid until expiry; logout cannot revoke
-those legacy tokens. Current permission checks continue to apply to every request.
+Previously issued JWTs without session IDs remain valid until expiry; logout cannot
+revoke those old tokens. New logins always issue session-bound JWTs. Current permission checks continue to apply to every request.
 
 ## Security and operations
 
@@ -56,8 +59,7 @@ logging policies in frontend apps or external infrastructure.
 Apply additive migration `0011_auth_sessions` to the target database before deploying
 this Worker. Old Workers remain compatible with the expanded schema. New Workers
 require these tables even when using legacy login. Deploy backend first; PKCE remains
-opt-in until the frontend adopts it. Do not change the legacy access-token lifetime
-as part of this rollout.
+opt-in until the frontend adopts it. All newly issued access tokens use `AUTH_ACCESS_TOKEN_MINUTES` (default 15).
 
 Run `uv run python scripts/cleanup_auth.py` daily outside the Worker with the intended
 `DATABASE_URL` and application settings. It removes expired codes, rate buckets and

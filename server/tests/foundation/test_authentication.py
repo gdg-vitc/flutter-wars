@@ -4,7 +4,7 @@ from uuid import uuid4
 from sqlmodel import Session, SQLModel
 
 from app.core.db import get_engine
-from app.modules.authentication.jwt import create_access_token
+from app.modules.authentication.jwt import create_access_token, decode_access_token
 from app.modules.authentication.model import Team, TeamMembership, UserIdentity
 
 
@@ -30,9 +30,7 @@ def _seed_team_a(preloaded: bool = False) -> tuple[int, int, str, str]:
 def test_google_login_and_me_resolve_current_membership(app, client):
     user_id, team_id, subject, email = _seed_team_a()
     app.state.google_token_verifier = lambda credential: (
-        {"google_subject": subject, "email": email}
-        if credential == "valid-google-token"
-        else None
+        {"google_subject": subject, "email": email} if credential == "valid-google-token" else None
     )
 
     login = client.post("/auth/google", json={"credential": "valid-google-token"})
@@ -51,15 +49,11 @@ def test_google_login_and_me_resolve_current_membership(app, client):
 
 def test_preloaded_participant_binds_google_subject_on_first_login(app, client):
     user_id, team_id, subject, email = _seed_team_a(preloaded=True)
-    app.state.google_token_verifier = lambda credential: {
-        "google_subject": subject, "email": email
-    }
+    app.state.google_token_verifier = lambda credential: {"google_subject": subject, "email": email}
 
     login = client.post("/auth/google", json={"credential": "first-login-token"})
     assert login.status_code == 200
-    me = client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {login.json()['access_token']}"}
-    )
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {login.json()['access_token']}"})
     assert me.status_code == 200
     assert me.json()["user_id"] == str(user_id)
     assert me.json()["team_id"] == str(team_id)
@@ -78,7 +72,8 @@ def test_invalid_or_unregistered_google_identity_is_rejected(app, client):
     assert invalid.json()["error"]["code"] == "INVALID_GOOGLE_CREDENTIAL"
 
     app.state.google_token_verifier = lambda credential: {
-        "google_subject": "unregistered", "email": "unknown@example.test"
+        "google_subject": "unregistered",
+        "email": "unknown@example.test",
     }
     unregistered = client.post("/auth/google", json={"credential": "valid-but-unknown"})
     assert unregistered.status_code == 403
@@ -89,9 +84,7 @@ def test_server_side_oauth_callback_exchanges_code_and_issues_jwt(app, client):
     user_id, team_id, subject, email = _seed_team_a()
     app.state.google_code_exchange = lambda code: "verified-google-id-token"
     app.state.google_token_verifier = lambda token: (
-        {"google_subject": subject, "email": email}
-        if token == "verified-google-id-token"
-        else None
+        {"google_subject": subject, "email": email} if token == "verified-google-id-token" else None
     )
     state = "test-oauth-state"
     client.cookies.set("google_oauth_state", state)
@@ -99,11 +92,20 @@ def test_server_side_oauth_callback_exchanges_code_and_issues_jwt(app, client):
     assert callback.status_code == 302
     redirect = urlsplit(callback.headers["location"])
     assert (redirect.scheme, redirect.netloc) == ("flutterwars", "auth-callback")
-    token = parse_qs(redirect.query)["access_token"][0]
+    parameters = parse_qs(redirect.query)
+    assert set(parameters) == {"access_token", "refresh_token"}
+    token = parameters["access_token"][0]
+    claims = decode_access_token(token, app.state.settings)
+    assert "sid" in claims
+    from datetime import UTC, datetime
 
-    me = client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {token}"}
-    )
+    remaining = claims["exp"] - datetime.now(UTC).timestamp()
+    assert 890 < remaining <= 900
+    refreshed = client.post("/auth/refresh", json={"refresh_token": parameters["refresh_token"][0]})
+    assert refreshed.status_code == 200
+    assert refreshed.json()["expires_in"] == 900
+
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["user_id"] == str(user_id)
     assert me.json()["team_id"] == str(team_id)

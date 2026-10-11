@@ -20,7 +20,6 @@ from app.core.errors import AppError
 from app.core.principal import get_principal
 from app.modules.authentication import sessions
 from app.modules.authentication.google import verify_google_token
-from app.modules.authentication.jwt import create_access_token
 from app.modules.authentication.oauth import authorization_url, exchange_code
 from app.modules.authentication.schemas import (
     CodeExchangeRequest,
@@ -47,25 +46,12 @@ def _google_verifier(request: Request) -> Callable[[str], Any]:
     return lambda credential: verify_google_token(credential, request.app.state.settings.google_oauth_client_id)
 
 
-def _issue_token(
-    request: Request, session: Session, google_identity: dict[str, str], *, refresh: bool = False
-) -> TokenResponse:
+def _issue_token(request: Request, session: Session, google_identity: dict[str, str]) -> TokenResponse:
     service = AuthenticationService(session, request.app.state.settings)
     principal = service.principal_for_google_identity(google_identity["google_subject"], google_identity["email"])
     if principal is None:
         raise AppError("ACCOUNT_NOT_ALLOWED", "Google account is not registered for this workshop.", 403)
-    if refresh:
-        return sessions.issue(session, request.app.state.settings, principal)
-    return TokenResponse(
-        expires_in=request.app.state.settings.jwt_access_token_minutes * 60,
-        access_token=create_access_token(
-            user_id=principal.user_id,
-            email=principal.email or google_identity["email"],
-            team_id=str(principal.team_id) if principal.team_id else None,
-            role=principal.role,
-            settings=request.app.state.settings,
-        ),
-    )
+    return sessions.issue(session, request.app.state.settings, principal)
 
 
 @router.get("/google/login", include_in_schema=True)
@@ -150,7 +136,7 @@ async def google_login_callback(
         parameters = {"code": raw}
     else:
         token = _issue_token(request, session, google_identity)
-        parameters = {"access_token": token.access_token}
+        parameters = {"access_token": token.access_token, "refresh_token": token.refresh_token}
     response = RedirectResponse(
         "flutterwars://auth-callback?" + urlencode(parameters),
         status_code=302,
@@ -172,7 +158,7 @@ async def google_login(
     if google_identity is None:
         raise AppError("INVALID_GOOGLE_CREDENTIAL", "Google credential is invalid.", 401)
     response.headers["Cache-Control"] = "no-store"
-    return _issue_token(request, session, google_identity, refresh=True)
+    return _issue_token(request, session, google_identity)
 
 
 @router.get("/me", response_model=MeResponse)
