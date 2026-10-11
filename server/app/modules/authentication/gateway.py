@@ -39,6 +39,10 @@ class IdentityGatewayImpl:
                 user_id, team_id = data.get("sub"), data.get("team_id")
                 if not isinstance(user_id, str) or not isinstance(team_id, (str, type(None))):
                     continue
+                if "sid" in data:
+                    from app.modules.authentication.sessions import verify_session
+
+                    verify_session(self.session, data["sid"], int(user_id))
                 claims[token] = (int(user_id), UUID(team_id) if team_id is not None else None)
             except (AppError, ValueError):
                 continue

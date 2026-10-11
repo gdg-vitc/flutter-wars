@@ -19,6 +19,7 @@ auth = importlib.import_module("app.modules.authentication.router")
 
 @pytest.mark.parametrize("case", ["success", "invalid_state", "invalid_google", "unregistered"])
 def test_oauth_callback_handoff(case, monkeypatch):
+    monkeypatch.setattr(auth.sessions, "rate_limit", lambda *args: None)
     app = FastAPI()
     app.state.settings = get_settings()
     app.state.google_code_exchange = lambda code: "verified-id-token"
@@ -34,8 +35,24 @@ def test_oauth_callback_handoff(case, monkeypatch):
         ),
     )
 
+    class FakeSession:
+        def exec(self, statement):
+            return SimpleNamespace(first=lambda: None)
+
     async def no_database():
-        return None
+        return FakeSession()
+
+    monkeypatch.setattr(
+        auth.sessions,
+        "issue",
+        lambda session, settings, p: auth.TokenResponse(
+            access_token=auth.create_access_token(
+                user_id=p.user_id, email=p.email, team_id=None, role=p.role, settings=settings
+            ),
+            refresh_token="r" * 43,
+            expires_in=3600,
+        ),
+    )
 
     app.dependency_overrides[get_db] = no_database
     install_exception_handlers(app)

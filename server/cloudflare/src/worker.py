@@ -36,6 +36,9 @@ SETTINGS = (
     "JWT_SECRET_KEY",
     "JWT_ALGORITHM",
     "JWT_ACCESS_TOKEN_MINUTES",
+    "AUTH_ACCESS_TOKEN_MINUTES",
+    "AUTH_SESSION_DAYS",
+    "AUTH_REFRESH_IDLE_DAYS",
     "GOOGLE_OAUTH_CLIENT_ID",
     "GOOGLE_OAUTH_CLIENT_SECRET",
     "GOOGLE_OAUTH_REDIRECT_URI",
@@ -104,6 +107,7 @@ def _build(env):
 
     http.install(get=_get_json, post=_post_form)
     app = create_app()
+    app.state.cloudflare_runtime = True
     app.openapi()
     return app
 

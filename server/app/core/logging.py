@@ -6,7 +6,19 @@ from collections.abc import Mapping
 from app.core.config import Settings
 
 LOGGER_NAME = "gdg_workshop"
-SENSITIVE_KEYS = {"authorization", "password", "token", "secret", "api_key", "database_url"}
+SENSITIVE_KEYS = {
+    "authorization",
+    "password",
+    "token",
+    "secret",
+    "api_key",
+    "database_url",
+    "access_token",
+    "refresh_token",
+    "code",
+    "code_verifier",
+    "credential",
+}
 
 
 def configure_logging(settings: Settings) -> logging.Logger:
@@ -22,9 +34,7 @@ def configure_logging(settings: Settings) -> logging.Logger:
 
 def safe_context(context: Mapping[str, object] | None = None) -> dict[str, object]:
     """Remove known credential fields before emitting operational context."""
-    return {
-        key: value for key, value in (context or {}).items() if key.lower() not in SENSITIVE_KEYS
-    }
+    return {key: value for key, value in (context or {}).items() if key.lower() not in SENSITIVE_KEYS}
 
 
 def log_exception(event: str, exc: Exception, context: Mapping[str, object] | None = None) -> None:

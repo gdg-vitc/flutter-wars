@@ -77,6 +77,10 @@ class AuthenticationService:
             raise AppError(
                 "INVALID_ACCESS_TOKEN", "Access token is invalid or expired.", 401
             ) from exc
+        if "sid" in claims:
+            from app.modules.authentication.sessions import verify_session
+
+            verify_session(self.session, claims["sid"], numeric_user_id)
         user = self.session.get(UserIdentity, numeric_user_id)
         if user is None:
             raise AppError(

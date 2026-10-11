@@ -12,7 +12,8 @@ from the environment or `.env`; in the Worker, from `vars` in `wrangler.jsonc` a
 | `DATABASE_URL` | yes | built from the `HYPERDRIVE` binding | locally: `postgresql+psycopg://...` |
 | `DATABASE_CONNECT_TIMEOUT_SECONDS`, `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW` | no | `vars` | the Worker uses NullPool regardless |
 | `JWT_SECRET_KEY` | yes | `wrangler secret put` | unique per environment |
-| `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_MINUTES` | no | `vars` | |
+| `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_MINUTES` | no | `vars` | legacy access-token lifetime |
+| `AUTH_ACCESS_TOKEN_MINUTES`, `AUTH_REFRESH_IDLE_DAYS`, `AUTH_SESSION_DAYS` | no | optional `vars` | defaults: 15 minutes, 7 days, 30 days; see [refresh tokens](refresh-tokens.md) |
 | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_REDIRECT_URI` | no | `vars` | the client ID is the token audience |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | yes | `wrangler secret put` | server-side sign-in only |
 | `RESALE_PROFIT_BPS`, `RESALE_EVENT_PROFIT_BPS`, `RESALE_MAX_LOSS_BPS` | no | optional `vars` | defaults/ceilings: 500, 200, 500; see [safeguards](market-safeguards.md) |

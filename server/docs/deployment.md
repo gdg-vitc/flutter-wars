@@ -154,3 +154,7 @@ The pg8000 driver choice was verified on Cloudflare; the former claim that
 psycopg runs in the Worker is incorrect. For each release, verify the intended
 Worker version, `/health`, `/ready`, the Hyperdrive configuration, and migration
 head. CI deployment requires the secrets/variables above and `DEPLOY_ENABLED=true`.
+
+Refresh-token sessions require migration `0011_auth_sessions` before deploying the
+updated Worker. The PKCE handoff remains opt-in; see [refresh tokens](refresh-tokens.md)
+for the frontend contract and daily expired-session cleanup.
