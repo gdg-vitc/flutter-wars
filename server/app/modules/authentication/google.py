@@ -15,6 +15,8 @@ from app.modules.authentication import http
 
 GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
+# Google and the Worker do not share a clock; tolerate small token timestamp skew.
+GOOGLE_CLOCK_SKEW_SECONDS = 30
 _KEYS: dict[str, dict] = {}
 _KEYS_EXPIRE_AT = 0.0
 log = logging.getLogger("gdg_workshop")
@@ -47,6 +49,7 @@ async def verify_google_token(credential: str, audience: str | None) -> dict[str
             key=jwt.PyJWK(keys[kid]).key,
             algorithms=["RS256"],
             audience=audience,
+            leeway=GOOGLE_CLOCK_SKEW_SECONDS,
             options={"require": ["exp", "iat", "iss", "aud", "sub"]},
         )
     except (jwt.PyJWTError, http.HttpError, KeyError, TypeError, ValueError) as exc:

@@ -56,7 +56,7 @@ def test_valid_token_yields_identity(signer):
         {"email_verified": False},
         {"aud": "someone-else"},
         {"iss": "https://evil.example"},
-        {"exp": int(time.time()) - 10},
+        {"exp": int(time.time()) - 60},
     ],
 )
 def test_untrusted_claims_are_rejected(signer, overrides):
@@ -68,3 +68,11 @@ def test_missing_client_id_or_wrong_signature_is_rejected(signer):
     other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     forged = jwt.encode({"sub": "x"}, other, algorithm="RS256", headers={"kid": "test-kid"})
     assert verify(forged) is None
+
+
+def test_small_google_clock_skew_is_accepted(signer):
+    assert verify(signer(iat=int(time.time()) + 20)) is not None
+
+
+def test_google_clock_skew_beyond_tolerance_is_rejected(signer):
+    assert verify(signer(iat=int(time.time()) + 60)) is None
