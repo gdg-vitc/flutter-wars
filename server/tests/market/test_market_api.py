@@ -86,6 +86,28 @@ def test_market_summary_before_setup(api: Api) -> None:
     assert error_code(api.get("/market/rounds/current")) == "NO_CURRENT_ROUND"
 
 
+def test_current_round_prefers_live_then_latest_started(session):
+    from app.modules.market import repository, service
+    from app.modules.market.models import Market, MarketRound
+
+    market = Market(name="Round selection")
+    session.add(market)
+    session.flush()
+    live = MarketRound(market_id=market.id, sequence=1, name="Live", kind="trading", status="paused")
+    closed = MarketRound(market_id=market.id, sequence=2, name="Closed", kind="trading", status="closed")
+    draft = MarketRound(market_id=market.id, sequence=3, name="Draft", kind="trading")
+    session.add_all([live, closed, draft])
+    session.flush()
+    assert service.current_round(session).id == live.id
+    assert repository.visible_round(session, market.id).id == live.id
+    live.status = "finalized"
+    session.flush()
+    assert service.current_round(session).id == closed.id
+    market.is_active = False
+    session.flush()
+    assert service.current_round(session) is None
+
+
 def test_only_one_active_market(api: Api) -> None:
     setup_market(api)
     response = api.post("/admin/market", json={"name": "Second"})

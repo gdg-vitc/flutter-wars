@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, case, col, select
 
 from app.contracts.catalog import CatalogGateway, WidgetInfo
 from app.core.services import gateway
@@ -35,6 +35,21 @@ def latest_started_round(session: Session, market_id: UUID) -> MarketRound | Non
         .where(MarketRound.market_id == market_id, MarketRound.status != RoundStatus.DRAFT)
         .order_by(col(MarketRound.sequence).desc())
         .limit(1),
+    ).one_or_none()
+
+
+def visible_round(session: Session, market_id: UUID | None = None) -> MarketRound | None:
+    """Prefer the live round, otherwise the latest started round, in one query."""
+    statement = select(MarketRound).where(MarketRound.status != RoundStatus.DRAFT)
+    if market_id is None:
+        statement = statement.join(Market).where(col(Market.is_active).is_(True))
+    else:
+        statement = statement.where(MarketRound.market_id == market_id)
+    return session.exec(
+        statement.order_by(
+            case((col(MarketRound.status).in_(LIVE_STATUSES), 0), else_=1),
+            col(MarketRound.sequence).desc(),
+        ).limit(1)
     ).one_or_none()
 
 

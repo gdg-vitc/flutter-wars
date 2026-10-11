@@ -108,10 +108,11 @@ def _bind(env):
 # Route registration, dependency analysis, response schemas, and the middleware
 # stack do not need runtime bindings. Preserve them in the deployment snapshot.
 _run_blocking_inline()
-registry.load("postgresql.pg8000")
+registry.load("postgresql.pg8000").import_dbapi()
 _app = build_app()
 _app.state.cloudflare_runtime = True
-_app.openapi()
+# OpenAPI is only needed by documentation requests; avoid allocating its schema
+# in every API isolate. FastAPI generates and caches it when /openapi.json is used.
 _app.middleware_stack = _app.build_middleware_stack()
 _bound = False
 

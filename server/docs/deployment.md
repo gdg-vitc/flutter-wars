@@ -19,7 +19,9 @@ against Neon (control-plane operation), never through Hyperdrive.
 at Worker module scope so fresh isolates reuse the deployment snapshot. The Worker
 also collects unreachable import-time objects before snapshotting, avoiding deferred
 file-resource finalizers against the restored runtime's filesystem. Do not suppress
-`ZipFile` exceptions globally. OpenAPI is generated and cached in the deployment snapshot.
+`ZipFile` exceptions globally. The PostgreSQL driver is loaded before snapshotting.
+OpenAPI is generated lazily for documentation requests, avoiding its schema allocation
+in isolates that only serve application traffic.
 Placement is set to `aws:ap-southeast-1` to reduce repeated database round trips to
 the Singapore Neon database. Preserve this setting in local deployment configs too.
 

@@ -96,6 +96,7 @@ def sdk(monkeypatch):
     pyodide = ModuleType("pyodide")
     http = ModuleType("pyodide.http")
     http.pyfetch = None
+    monkeypatch.setitem(sys.modules, "pg8000", ModuleType("pg8000"))
     for name, module in (("workers", workers), ("js", js), ("pyodide", pyodide), ("pyodide.http", http)):
         monkeypatch.setitem(sys.modules, name, module)
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "cloudflare/src"))

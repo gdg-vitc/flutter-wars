@@ -148,16 +148,13 @@ def lock_round(session: Session, round_id: UUID, *, exclusive: bool = False) -> 
 
 def current_round(session: Session) -> MarketRound | None:
     """The round participants should see: the live one, else the latest one that ran."""
-    market = repo.active_market(session)
-    if market is None:
-        return None
-    return repo.live_round(session, market.id) or repo.latest_started_round(session, market.id)
+    return repo.visible_round(session)
 
 
 def status_summary(session: Session) -> dict[str, object]:
     """Read-only market/round summary for the organizer dashboard (Module K's port)."""
     market = repo.active_market(session)
-    rnd = current_round(session)
+    rnd = repo.visible_round(session, market.id) if market else None
     return {
         "market": None if market is None else {"id": str(market.id), "name": market.name},
         "round": None

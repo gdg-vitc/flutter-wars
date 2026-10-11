@@ -114,7 +114,7 @@ def market_summary(
 ) -> MarketSummary:
     def load() -> MarketSummary:
         market = repo.active_market(session)
-        rnd = service.current_round(session)
+        rnd = repo.visible_round(session, market.id) if market else None
         return MarketSummary(
             market=MarketOut.model_validate(market, from_attributes=True) if market else None,
             current_round=_round_out(rnd) if rnd else None,

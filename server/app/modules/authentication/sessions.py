@@ -1,6 +1,7 @@
 """Opaque session credentials. Mutations are serialized by the parent session lock."""
 
 import hashlib
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -123,6 +124,7 @@ def rotate(db: Session, settings: Settings, raw: str) -> TokenResponse:
         db.add(row)
         # Persist revocation even though the dependency rolls back the rejected request.
         db.commit()
+        logging.getLogger("gdg_workshop").warning("auth_refresh_reuse session_id=%s", row.id)
         raise invalid_refresh()
     try:
         principal = current_principal(db, settings, row.user_id)
@@ -130,6 +132,7 @@ def rotate(db: Session, settings: Settings, raw: str) -> TokenResponse:
         row.revoked_at = timestamp
         db.add(row)
         db.commit()
+        logging.getLogger("gdg_workshop").info("auth_session_revoked reason=permissions session_id=%s", row.id)
         raise invalid_refresh() from None
     credential.consumed_at = timestamp
     row.idle_expires_at = min(row.expires_at, timestamp + timedelta(days=settings.auth_refresh_idle_days))
