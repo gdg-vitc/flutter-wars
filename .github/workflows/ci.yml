@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+    paths: ["server/**", ".github/workflows/**"]
+  push:
+    branches: [main]
+    paths: ["server/**", ".github/workflows/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  checks:
+    name: Lint, tests, migrations, Worker bundle
+    runs-on: ubuntu-latest
+    # A real Postgres service so locking, readiness and migration tests run for real.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: flutter_modules_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PG: postgresql+psycopg://postgres:ci@localhost:5432
+      PGTZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check app tests scripts migrations cloudflare/src/worker.py cloudflare/src/round_stream.py
+
+      - name: Create disposable databases
+        run: |
+          PGPASSWORD=ci psql -h localhost -U postgres -c "CREATE DATABASE flutterwars_test"
+          PGPASSWORD=ci psql -h localhost -U postgres -c "CREATE DATABASE flutter_migration_test"
+          PGPASSWORD=ci psql -h localhost -U postgres -c "CREATE DATABASE migrate_check"
+
+      - name: Tests (every team's suite + end-to-end, PostgreSQL)
+        run: |
+          TEST_DATABASE_URL=$PG/flutterwars_test \
+          MODULES_TEST_DATABASE_URL=$PG/flutter_modules_test \
+          MIGRATION_DATABASE_URL=$PG/flutter_migration_test \
+          uv run pytest
+
+      - name: Migrations apply, match the models, roll back
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:ci@localhost:5432/migrate_check
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+      - name: Worker bundle builds (dry run)
+        working-directory: server/cloudflare
+        run: |
+          npm ci
+          uv sync --locked
+          ./build.sh
+          uv run pywrangler deploy --dry-run --outdir dist
+
+      - name: Secret scan (tracked files)
+        working-directory: .
+        run: |
+          matches="$(git grep -nE 'postgres(ql)?(\+[a-z0-9]+)?://[A-Za-z0-9_.-]+:[^@/[:space:]]{6,}@' -- \
+                       server ':(exclude)server/tests' ':(exclude)server/*.example' || true)"
+          real="$(printf '%s\n' "$matches" | grep -v 'PASSWORD' | grep -v '^$' || true)"
+          if [ -n "$real" ]; then
+            echo "::error::Potential credential committed"
+            printf '%s\n' "$real"
+            exit 1
+          fi

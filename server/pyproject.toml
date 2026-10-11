@@ -1,0 +1,37 @@
+[project]
+name = "flutter-wars-server"
+version = "0.1.0"
+description = "GDG Flutter Workshop backend: Modules A-K and M (Team 2, Team 3, Team 6)"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.14,<2.0",
+    "fastapi>=0.115,<1.0",
+    "httpx>=0.27,<1.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "pydantic-settings>=2.6,<3.0",
+    "pyjwt[crypto]>=2.8,<3.0",
+    "sqlmodel>=0.0.22,<0.1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q -ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = [
+    "B008",  # FastAPI's Depends()/Query() in defaults is the intended pattern
+    "E501",  # line length is left to each module's own formatting
+]

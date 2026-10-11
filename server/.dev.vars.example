@@ -1,0 +1,8 @@
+# Copy to cloudflare/.dev.vars for local Worker dev. NEVER commit the real .dev.vars.
+# Run from cloudflare/: ./build.sh && uv run pywrangler dev
+# The Worker uses pg8000, not psycopg. Production APP_ENV is set in wrangler.jsonc.
+# In local Worker dev, Hyperdrive connects directly to the DB named here
+# (no Hyperdrive pooling/caching locally).
+# See: https://developers.cloudflare.com/hyperdrive/configuration/local-development/
+APP_ENV=development
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require

@@ -1,0 +1,19 @@
+# Cloudflare Python Worker packaging for the server app (Module M).
+# Separate from server/pyproject.toml: only what runs inside the Worker.
+[project]
+name = "flutter-wars-api"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "sqlmodel",
+    "pydantic-settings",
+    "pyjwt[crypto]",  # Module B JWTs and Google ID-token (RS256) verification
+    "pg8000",  # pure-Python driver; psycopg cannot load in Pyodide (no libpq)
+]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+]
